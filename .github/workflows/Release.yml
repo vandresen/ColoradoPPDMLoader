@@ -33,7 +33,17 @@ jobs:
         run: dir ./output
         
       - name: Upload ColoradoPPDMLoader Build Artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: ColoradoPPDMLoader
           path: ./output/ColoradoPPDMLoader.exe
+
+      - name: Create release
+        id: create-new-release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.event.inputs.versionNumber }}
+          release_name: Release V${{ github.event.inputs.versionNumber }}
+          body_path: "./CHANGELOG.md"
