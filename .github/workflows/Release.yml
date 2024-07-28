@@ -25,3 +25,15 @@ jobs:
         
       - name: Build
         run: dotnet build --configuration Release --no-restore 
+
+      - name: Publish
+        run: dotnet publish ./ColoradoPPDMLoader/ColoradoPPDMLoader.csproj -c Release --self-contained true -r win-x64 -p:PublishSingleFile=true --output ./output
+
+      - name: View content1
+        run: dir ./output
+        
+      - name: Upload ColoradoPPDMLoader Build Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ColoradoPPDMLoader
+          path: ./output/ColoradoPPDMLoader.exe
