@@ -50,12 +50,10 @@ rootCommand.SetHandler(async (string connectionString, string cacheFolder) =>
     await app!.Run(cacheFolder, connectionString);
 
     Console.WriteLine("Press Enter to exit...");
-    Console.ReadLine(); // Wait for the user to press Enter
+    Console.ReadLine();
 
-    await host.StopAsync(); // Gracefully stop the host
-    await host.WaitForShutdownAsync(); // Wait for the host to complete shutdown
-
-    //await host.RunAsync();
+    await host.StopAsync();
+    await host.WaitForShutdownAsync();
 
 }, connectionStringOption, cacheFolderOption);
 
