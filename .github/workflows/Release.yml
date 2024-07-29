@@ -29,21 +29,16 @@ jobs:
       - name: Publish
         run: dotnet publish ./ColoradoPPDMLoader/ColoradoPPDMLoader.csproj -c Release --self-contained true -r win-x64 -p:PublishSingleFile=true --output ./output
 
-      - name: View content1
+      - name: View content
         run: dir ./output
         
-      - name: Upload ColoradoPPDMLoader Build Artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        uses: ncipollo/release-action@v1
         with:
-          name: ColoradoPPDMLoader
-          path: ./output/ColoradoPPDMLoader.exe
-
-      - name: Create release
-        id: create-new-release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ github.event.inputs.versionNumber }}
-          release_name: Release V${{ github.event.inputs.versionNumber }}
-          body_path: "./CHANGELOG.md"
+            artifacts: ./output/TexasPPDMLoader.exe
+            token: ${{ secrets.GITHUB_TOKEN }}
+            tag: v${{ github.event.inputs.versionNumber }}
+            name: Release V${{ github.event.inputs.versionNumber }}
+            bodyFile: ./CHANGELOG.md
+            draft: false
+            prerelease: false
