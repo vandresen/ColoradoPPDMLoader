@@ -35,7 +35,7 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-            artifacts: ./output/TexasPPDMLoader.exe
+            artifacts: D:\a\ColoradoPPDMLoader\ColoradoPPDMLoader\output
             token: ${{ secrets.GITHUB_TOKEN }}
             tag: v${{ github.event.inputs.versionNumber }}
             name: Release V${{ github.event.inputs.versionNumber }}
