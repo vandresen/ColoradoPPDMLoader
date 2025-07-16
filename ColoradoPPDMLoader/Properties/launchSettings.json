@@ -2,7 +2,7 @@
   "profiles": {
     "ColoradoPPDMLoader": {
       "commandName": "Project",
-      "commandLineArgs": "-c \"Data Source=VIDARSURFACEPRO;Persist Security Info=False;Initial Catalog =PPDM_TEST1;Integrated Security=True;Encrypt=False;MultipleActiveResultSets=True;Connection Timeout=120\""
+      "commandLineArgs": "-c \"Data Source=VIDARSURFACEPRO;Persist Security Info=False;Initial Catalog =Colorado;Integrated Security=True;Encrypt=False;MultipleActiveResultSets=True;Connection Timeout=120\""
     }
   }
 }
