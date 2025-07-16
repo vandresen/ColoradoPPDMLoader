@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionNumber:
+        description: 'Version number'   
+        required: true
+
+jobs:
+  build:
+    name: Build release
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+          
+      - name: Install dependencies
+        run: dotnet restore
+        
+      - name: Build
+        run: dotnet build --configuration Release --no-restore 
+
+      - name: Publish
+        run: dotnet publish ./ColoradoPPDMLoader/ColoradoPPDMLoader.csproj -c Release --self-contained true -r win-x64 -p:PublishSingleFile=true --output ./output
+
+      - name: View content
+        run: dir ./output
+        
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+            artifacts: D:\a\ColoradoPPDMLoader\ColoradoPPDMLoader\output\ColoradoPPDMLoader.exe
+            token: ${{ secrets.GITHUB_TOKEN }}
+            tag: v${{ github.event.inputs.versionNumber }}
+            name: Release V${{ github.event.inputs.versionNumber }}
+            bodyFile: ./CHANGELOG.md
+            draft: false
+            prerelease: false
