@@ -16,6 +16,7 @@ namespace LoaderLibrary.Data
         private readonly string wellBoreUrl = @"https://ecmc.state.co.us/data2.html#/downloads";
         private readonly string file = "WELLS_SHP.ZIP";
         private readonly string fileNameInZip = "Wells.dbf";
+        private readonly string bottomHoleFileInZip = "Directional_Bottomhole_Locations.dbf";
         private readonly ILogger _log;
         private readonly IDataAccess _da;
 
@@ -27,112 +28,138 @@ namespace LoaderLibrary.Data
 
         public async Task CopyWellbores(string connectionString, string path)
         {
-            IEnumerable<TableSchema> tableAttributeInfo = await GetColumnInfo(connectionString, "WELL");
-            TableSchema? dataProperty = tableAttributeInfo.FirstOrDefault(x => x.COLUMN_NAME == "OPERATOR");
-            int operatorLength = dataProperty == null ? 4 : dataProperty.PRECISION;
-            dataProperty = tableAttributeInfo.FirstOrDefault(x => x.COLUMN_NAME == "ASSIGNED_FIELD");
-            int fieldLength = dataProperty == null ? 4 : dataProperty.PRECISION;
-            dataProperty = tableAttributeInfo.FirstOrDefault(x => x.COLUMN_NAME == "WELL_NAME");
-            int wellNameLength = dataProperty == null ? 4 : dataProperty.PRECISION;
+            // Retrieve column lengths for truncation
+            var tableAttributes = await GetColumnInfo(connectionString, "WELL");
+            int GetColumnLength(string name) => tableAttributes.FirstOrDefault(x => x.COLUMN_NAME == name)?.PRECISION ?? 4;
 
-            List<WellHeader> headers = new List<WellHeader>();
-            string downloadUrl = GetDownloadLink("Well Surface Location Data (Updated Daily)", "Well Spots (APIs)(10 Mb)");
-            string remark = $"Downloaded from {downloadUrl}";
+            int operatorLength = GetColumnLength("OPERATOR");
+            int fieldLength = GetColumnLength("ASSIGNED_FIELD");
+            int wellNameLength = GetColumnLength("WELL_NAME");
 
-            using (HttpClient client = new HttpClient())
-            using (HttpResponseMessage response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+            var headers = new List<WellHeader>();
+            using var client = new HttpClient();
+
+            // === Download and read surface location data ===
+            string surfaceUrl = GetDownloadLink(
+                "Well Surface Location Data (Updated Daily)",
+                "Well Spots (APIs)(10 Mb)"
+            );
+
+            string remark = $"Downloaded from {surfaceUrl}";
+            using var surfaceDbf = await ReadDbfFromZipAsync(client, surfaceUrl, fileNameInZip);
+
+            foreach (var record in surfaceDbf)
             {
-                response.EnsureSuccessStatusCode();
+                string api = "05" + (record["API"] as string ?? "");
+                api = api + "00";
+                string wellName = (record["Well_Name"] as string ?? "").Trim();
+                string operatorName = (record["Operator"] as string ?? "").Trim();
+                string fieldName = (record["Field_Name"] as string ?? "").Trim();
 
-                using (Stream remoteZipStream = await response.Content.ReadAsStreamAsync())
-                using (ZipArchive inputZip = new ZipArchive(remoteZipStream, ZipArchiveMode.Read, leaveOpen: false))
+                var header = new WellHeader
                 {
-                    ZipArchiveEntry wellsEntry = inputZip.GetEntry(fileNameInZip);
+                    UWI = api,
+                    WELL_NAME = wellName.Length > wellNameLength ? wellName[..wellNameLength] : wellName,
+                    OPERATOR = operatorName.Length > operatorLength ? operatorName[..operatorLength] : operatorName,
+                    ASSIGNED_FIELD = fieldName.Length > fieldLength ? fieldName[..fieldLength] : fieldName,
+                    SPUD_DATE = record["Spud_Date"] as DateTime?,
+                    DEPTH_DATUM_ELEV = record["Ground_Ele"] as int?,
+                    DEPTH_DATUM = "GR",
+                    FINAL_TD = record["Max_MD"] as int?,
+                    CURRENT_STATUS_DATE = record["Stat_Date"] as DateTime?,
+                    SURFACE_LONGITUDE = record["Longitude"] is double lon1 ? lon1 : (double?)null,
+                    SURFACE_LATITUDE = record["Latitude"] is double lat1 ? lat1 : (double?)null,
+                    CURRENT_STATUS = (record["Facil_Stat"] as string ?? "").Trim(),
+                    REMARK = remark
+                };
 
-                    if (wellsEntry == null)
-                    {
-                        throw new FileNotFoundException($"File '{fileNameInZip}' not found in downloaded zip.");
-                    }
-                    MemoryStream zipStream = new MemoryStream();
-                    using (Stream stream = wellsEntry.Open())
-                    {
-                        stream.CopyTo(zipStream);
-                    }
-
-                    zipStream.Position = 0;
-
-                    using var dbf = new DbfReader(zipStream);
-                    foreach (var record in dbf)
-                    {
-                        string api = "05" + record["API"];
-                        string apiCounty = (string)record["API_County"];
-                        string apiSeq = (string)record["API_Seq"];
-                        string apiLabel = (string)record["API_Label"];
-                        int? operatorNum = (int?)record["Operat_Num"];
-                        string operatorName = (string)record["Operator"];
-                        string wellNum = (string)record["Well_Num"];
-                        string wellName = (string)record["Well_Name"];
-                        string wellTitle = (string)record["Well_Title"];
-                        string citingType = (string)record["Citing_Typ"];
-                        DateTime? spudDate = (DateTime?)record["Spud_Date"];
-                        int? groundElev = (int?)record["Ground_Ele"];
-                        int? maxMD = (int?)record["Max_MD"];
-                        int? maxTVD = (int?)record["Max_TVD"];
-                        int? fieldCode = (int?)record["Field_Code"];
-                        string fieldName = (string)record["Field_Name"];
-                        int? facilId = (int?)record["Facil_Id"];
-                        string facilType = (string)record["Facil_Type"];
-                        string facilStat = (string)record["Facil_Stat"];
-                        string wellClass = (string)record["Well_Class"];
-                        DateTime? statDate = (DateTime?)record["Stat_Date"];
-                        string locQual = (string)record["Loc_Qual"];
-                        int? locId = (int?)record["Loc_ID"];
-                        string locName = (string)record["Loc_Name"];
-                        int? distNS = (int?)record["Dist_N_S"];
-                        string dirNS = (string)record["Dir_N_S"];
-                        int? distEW = (int?)record["Dist_E_W"];
-                        string dirEW = (string)record["Dir_E_W"];
-                        string qtrQtr = (string)record["Qtr_Qtr"];
-                        string section = (string)record["Section"];
-                        string township = (string)record["Township"];
-                        string range = (string)record["Range"];
-                        string meridian = (string)record["Meridian"];
-                        double latitude = (double)record["Latitude"];
-                        double longitude = (double)record["Longitude"];
-                        int? utmX = (int?)record["Utm_X"];
-                        int? utmY = (int?)record["Utm_Y"];
-
-                        WellHeader head = new WellHeader()
-                        {
-                            UWI = api,
-                            WELL_NAME = wellName,
-                            OPERATOR = operatorName,
-                            ASSIGNED_FIELD = fieldName,
-                            SPUD_DATE = spudDate,
-                            DEPTH_DATUM_ELEV = groundElev,
-                            DEPTH_DATUM = "GR",
-                            FINAL_TD = maxMD,
-                            CURRENT_STATUS_DATE = statDate,
-                            SURFACE_LONGITUDE = longitude,
-                            SURFACE_LATITUDE = latitude,
-                            CURRENT_STATUS = facilStat,
-                            REMARK = remark,
-                        };
-
-                        if (head.WELL_NAME.Length > wellNameLength)
-                            head.WELL_NAME = head.WELL_NAME.Substring(0, wellNameLength);
-                        if (head.OPERATOR.Length > operatorLength)
-                            head.OPERATOR = head.OPERATOR.Substring(0, operatorLength);
-                        if (head.ASSIGNED_FIELD.Length > fieldLength)
-                            head.ASSIGNED_FIELD = head.ASSIGNED_FIELD.Substring(0, fieldLength);
-                        headers.Add(head);
-                    }
-                }
+                headers.Add(header);
             }
 
+            // === Optional: Download and merge bottom-hole locations ===
+            string bottomUrl = GetDownloadLink(
+                "Directional Well Data (Updated Daily)",
+                "Directional Bottom Hole Locations (1 Mb)"
+            );
 
+            using var bottomDbf = await ReadDbfFromZipAsync(client, bottomUrl, bottomHoleFileInZip);
+
+            foreach (var record in bottomDbf)
+            {
+                string api = "05" + (record["API"] as string ?? "");
+                double? lat = record["Lat"] as double?;
+                double? lon = record["Long"] as double?;
+                double? td = record["MD"] as double?;
+                string wellName = (record["Well_Name"] as string ?? "").Trim();
+                string operatorName = (record["Operator"] as string ?? "").Trim();
+                operatorName = operatorName.Length > operatorLength ? operatorName[..operatorLength] : operatorName;
+                var match = headers.FirstOrDefault(h => h.UWI == api);
+                if (match != null)
+                {
+                    match.BOTTOM_HOLE_LATITUDE = lat;
+                    match.BOTTOM_HOLE_LONGITUDE = lon;
+                    match.WELL_NAME = wellName;
+                    match.OPERATOR = operatorName;
+                    match.FINAL_TD = td;
+                }
+                else
+                {
+                    string uwi10 = api.Substring(0, 10);
+                    var surfaceSource = headers.FirstOrDefault(h => h.UWI.StartsWith(uwi10));
+                    if (surfaceSource != null)
+                    {
+                        // Create sidetrack copy
+                        var sidetrack = new WellHeader
+                        {
+                            UWI = api, // keep it 10-digit to avoid duplicate with original
+                            WELL_NAME = wellName,
+                            OPERATOR = operatorName,
+                            ASSIGNED_FIELD = surfaceSource.ASSIGNED_FIELD,
+                            SPUD_DATE = surfaceSource.SPUD_DATE,
+                            DEPTH_DATUM_ELEV = surfaceSource.DEPTH_DATUM_ELEV,
+                            DEPTH_DATUM = surfaceSource.DEPTH_DATUM,
+                            FINAL_TD = td,
+                            CURRENT_STATUS_DATE = surfaceSource.CURRENT_STATUS_DATE,
+                            SURFACE_LATITUDE = surfaceSource.SURFACE_LATITUDE,
+                            SURFACE_LONGITUDE = surfaceSource.SURFACE_LONGITUDE,
+                            CURRENT_STATUS = surfaceSource.CURRENT_STATUS,
+                            REMARK = surfaceSource.REMARK + " (sidetrack inferred)",
+
+                            BOTTOM_HOLE_LATITUDE = lat,
+                            BOTTOM_HOLE_LONGITUDE = lon
+                        };
+                        headers.Add(sidetrack);
+                    }
+                }
+
+            }
+
+            
             await SaveWellbores(headers, connectionString);
         }
+
+
+        private async Task<DbfReader> ReadDbfFromZipAsync(HttpClient client, string zipUrl, string entryName)
+        {
+            using var response = await client.GetAsync(zipUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            using var remoteZipStream = await response.Content.ReadAsStreamAsync();
+            using var inputZip = new ZipArchive(remoteZipStream, ZipArchiveMode.Read, leaveOpen: false);
+
+            var entry = inputZip.GetEntry(entryName)
+                ?? throw new FileNotFoundException($"File '{entryName}' not found in downloaded zip.");
+
+            var zipStream = new MemoryStream();
+            using (var entryStream = entry.Open())
+            {
+                await entryStream.CopyToAsync(zipStream);
+            }
+
+            zipStream.Position = 0;
+            return new DbfReader(zipStream); // assuming your `DbfReader` owns the stream
+        }
+
 
         private async Task SaveWellbores(List<WellHeader> wellbores, string connectionString)
         {
