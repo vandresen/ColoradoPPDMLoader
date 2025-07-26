@@ -2,5 +2,5 @@
 * New console app to load oil & gas data from Colorado into a PPDM database
 
 # Release 1.1.0
-* Added support dor deviations survey
+* Added support for deviations survey
 * Refactored the tool so that you don't need a cache folder anymore 
