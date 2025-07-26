@@ -5,6 +5,11 @@ The release have a self contained executable that you can download. This does no
 
 It is using software from Selenium to download data. Selenium is basically test software for web based user interface. We are using their chrome driver for this.
 
-Data types supported:
+Usage:
+  ColoradoPPDMLoader [options]
 
-Well header
+Options:
+  -c, --connection-string <connection-string> (REQUIRED)  The connection string for the database.
+  --datatype <Deviations|Wellbore> (REQUIRED)             Data type to process: Wellbore or Deviations
+  --version                                               Show version information
+  -?, -h, --help                                          Show help and usage information
